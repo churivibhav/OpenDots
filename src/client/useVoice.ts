@@ -25,6 +25,12 @@ function recognitionConstructor(): RecognitionConstructor | undefined {
   return scope.SpeechRecognition ?? scope.webkitSpeechRecognition;
 }
 
+const mobile =
+  typeof navigator !== 'undefined' &&
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// How long the speaker must pause before their words are sent.
+const pauseMs = 1500;
+
 // Cascaded voice: browser speech recognition, a Dot turn per utterance, and
 // server-side TTS playback.
 export function useVoice(
@@ -61,6 +67,9 @@ export function useVoice(
         busy: boolean;
         listening: boolean;
         pending: string[];
+        // Final phrases heard since the last turn; sent after a pause.
+        heard: string[];
+        silence?: ReturnType<typeof setTimeout>;
       }
     | undefined
   >(undefined);
@@ -94,6 +103,7 @@ export function useVoice(
     if (!current) return;
     current.cancelled = true;
     current.recognition.onend = null;
+    clearTimeout(current.silence);
     current.recognition.abort();
     current.audio.pause();
     if (current.audio.src) URL.revokeObjectURL(current.audio.src);
@@ -247,7 +257,9 @@ export function useVoice(
     setCaption('');
     setUserCaption('');
     const recognition = new Recognizer();
-    recognition.continuous = true;
+    // Mobile engines mark short fragments final and repeat growing transcripts
+    // in continuous mode, so phones use single-phrase sessions that restart.
+    recognition.continuous = !mobile;
     recognition.interimResults = true;
     recognition.lang = navigator.language || 'en-US';
     const current = {
@@ -261,8 +273,18 @@ export function useVoice(
       busy: false,
       listening: false,
       pending: [] as string[],
+      heard: [] as string[],
+      silence: undefined as ReturnType<typeof setTimeout> | undefined,
     };
     session.current = current;
+    // Send what was heard once the speaker pauses, not on every final fragment.
+    const flush = () => {
+      current.silence = undefined;
+      const text = current.heard.splice(0).join(' ').trim();
+      if (!text || current.cancelled) return;
+      if (current.busy) current.pending.push(text);
+      else void respond(text);
+    };
     recognition.onresult = (event) => {
       if (current.cancelled) return;
       let interim = '';
@@ -271,17 +293,27 @@ export function useVoice(
         const text = result[0].transcript.trim();
         if (!text) continue;
         if (result.isFinal) {
-          setUserCaption(text);
-          if (current.busy) current.pending.push(text);
-          else void respond(text);
+          const last = current.heard.at(-1);
+          // Some engines resend the growing phrase; keep only the longest.
+          if (last && text.startsWith(last))
+            current.heard[current.heard.length - 1] = text;
+          else if (!last?.startsWith(text)) current.heard.push(text);
         } else interim += `${text} `;
       }
-      if (interim) setUserCaption(interim.trim());
+      setUserCaption([...current.heard, interim.trim()].join(' ').trim());
+      clearTimeout(current.silence);
+      current.silence = setTimeout(flush, pauseMs);
     };
     recognition.onerror = (event) => {
       if (current.cancelled) return;
       if (['not-allowed', 'service-not-allowed'].includes(event.error)) {
         setError('Microphone access was denied.');
+        void end();
+      } else if (event.error === 'network') {
+        // Brave, Chromium, Vivaldi and Opera expose the API without a service.
+        setError(
+          "This browser can't reach a speech recognition service. Use Chrome, Edge, or Safari for voice calls.",
+        );
         void end();
       } else if (!['no-speech', 'aborted'].includes(event.error))
         setError(`Speech recognition error: ${event.error}.`);
@@ -289,7 +321,7 @@ export function useVoice(
     recognition.onend = () => {
       current.listening = false;
       // Browsers stop recognition after silence; keep the call hands-free.
-      if (!current.cancelled) setTimeout(listen, 250);
+      if (!current.cancelled) setTimeout(listen, mobile ? 0 : 250);
     };
     try {
       const response = await api<{ id: string }>('/voice/calls', 'POST', {
