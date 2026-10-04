@@ -283,6 +283,12 @@ export function useVoice(
       if (['not-allowed', 'service-not-allowed'].includes(event.error)) {
         setError('Microphone access was denied.');
         void end();
+      } else if (event.error === 'network') {
+        // Brave, Chromium, Vivaldi and Opera expose the API without a service.
+        setError(
+          "This browser can't reach a speech recognition service. Use Chrome, Edge, or Safari for voice calls.",
+        );
+        void end();
       } else if (!['no-speech', 'aborted'].includes(event.error))
         setError(`Speech recognition error: ${event.error}.`);
     };
