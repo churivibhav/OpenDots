@@ -32,7 +32,7 @@ import type {
   WorkspaceState,
 } from '../shared/types';
 import { api, ApiError, authHeaders, setToken } from './api';
-import { Mascot } from './Mascot';
+import { Mascot, assignCharacters } from './Mascot';
 import { Chat } from './Chat';
 import { ThreadList } from './ThreadList';
 import { ResultPane } from './ResultPane';
@@ -112,6 +112,7 @@ export function App() {
         api<WorkspaceState>('/workspace'),
       ]);
       setState(s);
+      assignCharacters(w.dots.map((dot) => dot.id));
       setWorkspace(w);
       setNeedsAuth(false);
       setSelectedDot((previous) => previous || w.dots[0]?.id || '');
