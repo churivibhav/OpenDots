@@ -81,6 +81,8 @@ export interface Dot {
   createdAt: number;
   learningContainerId?: string | null;
   skillDeliveryEnabled?: boolean;
+  /** OpenCode agent this Dot delegates to; null disables OpenCode. */
+  opencodeAgent?: string | null;
 }
 export interface Conversation {
   id: string;
@@ -107,6 +109,7 @@ export interface SetupStatus {
   browser: boolean;
   voice: boolean;
   opencode: boolean;
+  opencodeAgents: string[];
   slack: string;
   missing: string[];
 }

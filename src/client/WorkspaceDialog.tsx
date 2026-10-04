@@ -53,6 +53,9 @@ export function WorkspaceDialog({
   const [skillDelivery, setSkillDelivery] = useState(
     dialog.type === 'dot' ? (dialog.dot?.skillDeliveryEnabled ?? false) : false,
   );
+  const [opencodeAgent, setOpencodeAgent] = useState(
+    dialog.type === 'dot' ? (dialog.dot?.opencodeAgent ?? '') : '',
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const container = useRef<HTMLElement>(null);
@@ -142,6 +145,7 @@ export function WorkspaceDialog({
                 memoryAllowed: memory,
                 learningContainerId: learningContainer.trim() || null,
                 skillDeliveryEnabled: skillDelivery,
+                opencodeAgent: opencodeAgent || null,
               };
             }
             if (dialog.type === 'settings') {
@@ -255,6 +259,35 @@ export function WorkspaceDialog({
               </select>
             </fieldset>
           )}
+          {dialog.type === 'dot' && workspace.setup.opencode && (
+            <fieldset className="space-access-fields">
+              <legend>OpenCode</legend>
+              <label className="field-label" htmlFor="opencode-agent">
+                Agent for wiki work
+              </label>
+              <select
+                id="opencode-agent"
+                value={opencodeAgent}
+                onChange={(event) => setOpencodeAgent(event.target.value)}
+              >
+                <option value="">None</option>
+                {[
+                  ...new Set([
+                    ...workspace.setup.opencodeAgents,
+                    ...(opencodeAgent ? [opencodeAgent] : []),
+                  ]),
+                ].map((agent) => (
+                  <option key={agent} value={agent}>
+                    {agent}
+                  </option>
+                ))}
+              </select>
+              <small>
+                The OpenCode agent's own permissions decide what this Dot can
+                read or change in the wiki.
+              </small>
+            </fieldset>
+          )}
           {(dialog.type === 'dot' || dialog.type === 'settings') && (
             <>
               <label className="permission-row">
@@ -264,10 +297,10 @@ export function WorkspaceDialog({
                   onChange={(e) => setResearch(e.target.checked)}
                 />
                 <span>
-                  <strong>Public-page research</strong>
+                  <strong>Research and background work</strong>
                   <small>
-                    Allow the server-side read-only browser tool. Global
-                    settings always take precedence.
+                    Allow web research tools and self-scheduled background
+                    tasks. Global settings always take precedence.
                   </small>
                 </span>
               </label>

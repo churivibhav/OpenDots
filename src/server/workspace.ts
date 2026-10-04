@@ -26,6 +26,7 @@ export class WorkspaceStore {
     for (const [table, column, definition] of [
       ['dots', 'learningContainerId', 'TEXT'],
       ['dots', 'skillDeliveryEnabled', 'INTEGER NOT NULL DEFAULT 0'],
+      ['dots', 'opencodeAgent', 'TEXT'],
       ['thread_bindings', 'learningContainerId', 'TEXT'],
     ]) {
       if (
@@ -109,6 +110,7 @@ export class WorkspaceStore {
         researchAllowed: !!row.researchAllowed,
         memoryAllowed: !!row.memoryAllowed,
         skillDeliveryEnabled: !!row.skillDeliveryEnabled,
+        opencodeAgent: row.opencodeAgent ?? null,
       })) as unknown as Dot[];
   }
   dot(id: string) {
@@ -123,6 +125,7 @@ export class WorkspaceStore {
     spaceIds: string[] = [spaceId],
     learningContainerId: string | null = null,
     skillDeliveryEnabled = false,
+    opencodeAgent: string | null = null,
   ): Dot {
     this.validateSpaceAccess(spaceId, spaceIds);
     validateLearningSettings(learningContainerId, skillDeliveryEnabled);
@@ -136,13 +139,14 @@ export class WorkspaceStore {
       memoryAllowed,
       learningContainerId,
       skillDeliveryEnabled,
+      opencodeAgent,
       createdAt: Date.now(),
     };
     this.db.exec('BEGIN');
     try {
       this.db
         .prepare(
-          'INSERT INTO dots (id, spaceId, name, instructions, researchAllowed, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO dots (id, spaceId, name, instructions, researchAllowed, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled, opencodeAgent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           dot.id,
@@ -154,6 +158,7 @@ export class WorkspaceStore {
           dot.createdAt,
           learningContainerId,
           +skillDeliveryEnabled,
+          opencodeAgent,
         );
       for (const id of dot.spaceIds)
         this.db.prepare('INSERT INTO dot_spaces VALUES (?, ?)').run(dot.id, id);
@@ -186,6 +191,7 @@ export class WorkspaceStore {
       spaceIds?: string[];
       learningContainerId?: string | null;
       skillDeliveryEnabled?: boolean;
+      opencodeAgent?: string | null;
     },
   ): Dot {
     const current = this.dot(id);
@@ -200,11 +206,15 @@ export class WorkspaceStore {
     const skillDeliveryEnabled =
       patch.skillDeliveryEnabled ?? current.skillDeliveryEnabled ?? false;
     validateLearningSettings(learningContainerId, skillDeliveryEnabled);
+    const opencodeAgent =
+      patch.opencodeAgent === undefined
+        ? (current.opencodeAgent ?? null)
+        : patch.opencodeAgent;
     this.db.exec('BEGIN');
     try {
       this.db
         .prepare(
-          'UPDATE dots SET name=?, instructions=?, researchAllowed=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=? WHERE id=?',
+          'UPDATE dots SET name=?, instructions=?, researchAllowed=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=?, opencodeAgent=? WHERE id=?',
         )
         .run(
           patch.name,
@@ -213,6 +223,7 @@ export class WorkspaceStore {
           +patch.memoryAllowed,
           learningContainerId,
           +skillDeliveryEnabled,
+          opencodeAgent,
           id,
         );
       this.db

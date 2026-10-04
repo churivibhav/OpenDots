@@ -38,13 +38,18 @@ function fixture(reply?: (url: string) => Response | Promise<Response>) {
 const signal = () => new AbortController().signal;
 it('reuses one authenticated session per thread and returns text with tool evidence', async () => {
   const f = fixture();
-  const first = await f.client.run('thread', 'List my todos', signal());
+  const first = await f.client.run(
+    'thread',
+    'List my todos',
+    signal(),
+    'helpdesk',
+  );
   expect(first).toEqual({
     sessionId: 'ses_1',
     text: 'Three items are open.',
     tools: ['notes/todo.md'],
   });
-  await f.client.run('thread', 'And the first one?', signal());
+  await f.client.run('thread', 'And the first one?', signal(), 'helpdesk');
   const urls = f.transport.mock.calls.map(([url]) => String(url));
   expect(urls).toEqual([
     'https://opencode.example/session',
@@ -56,24 +61,25 @@ it('reuses one authenticated session per thread and returns text with tool evide
     `Basic ${Buffer.from('opencode:secret').toString('base64')}`,
   );
   expect(JSON.parse(String(init.body))).toMatchObject({
+    agent: 'helpdesk',
     model: { providerID: 'openai', modelID: 'gpt-5.5' },
   });
-  await f.client.run('thread', 'Start over', signal(), true);
+  await f.client.run('thread', 'Start over', signal(), 'helpdesk', true);
   expect(f.store.opencodeSession('thread')).toBe('ses_2');
 });
 it('reports HTTP failures and empty replies', async () => {
   const failing = fixture(() => new Response('nope', { status: 401 }));
-  await expect(failing.client.run('thread', 'x', signal())).rejects.toThrow(
-    'HTTP 401',
-  );
+  await expect(
+    failing.client.run('thread', 'x', signal(), 'helpdesk'),
+  ).rejects.toThrow('HTTP 401');
   const empty = fixture((url) =>
     url.endsWith('/session')
       ? Response.json({ id: 'ses_1' })
       : Response.json({ parts: [] }),
   );
-  await expect(empty.client.run('thread', 'x', signal())).rejects.toThrow(
-    'no response',
-  );
+  await expect(
+    empty.client.run('thread', 'x', signal(), 'helpdesk'),
+  ).rejects.toThrow('no response');
 });
 it('asks OpenCode to abort the session when the turn is cancelled', async () => {
   const controller = new AbortController();
@@ -84,7 +90,7 @@ it('asks OpenCode to abort the session when the turn is cancelled', async () => 
     return Promise.reject(new DOMException('aborted', 'AbortError'));
   });
   await expect(
-    f.client.run('thread', 'Long job', controller.signal),
+    f.client.run('thread', 'Long job', controller.signal, 'helpdesk'),
   ).rejects.toThrow();
   expect(
     f.transport.mock.calls.some(([url]) =>

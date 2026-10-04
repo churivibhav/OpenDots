@@ -8,7 +8,7 @@ import { Runner } from './runner.js';
 import { createApp } from './app.js';
 import { WorkspaceStore } from './workspace.js';
 import { Platform } from './platform.js';
-import type { PlatformConfig } from './platform-config.js';
+import { turnTimeoutMs, type PlatformConfig } from './platform-config.js';
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 4310);
 const ownerToken = process.env.OWNER_TOKEN;
@@ -46,6 +46,10 @@ const config: PlatformConfig = {
   opencodeUsername: process.env.OPENCODE_USERNAME || 'opencode',
   opencodePassword: process.env.OPENCODE_PASSWORD || undefined,
   opencodeModel: process.env.OPENCODE_MODEL || undefined,
+  opencodeAgents: (process.env.OPENCODE_AGENTS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
   opencodeTimeoutMs: Number(process.env.OPENCODE_TIMEOUT_MS) || 600_000,
   slackChannel: process.env.SLACK_CHANNEL_NAME,
   slackTeam: process.env.SLACK_TEAM_ID,
@@ -81,6 +85,7 @@ const runner = new Runner(
     const text = await platform.turn(threadId, claim.prompt, signal);
     return { text, sources: [], sample: false };
   },
+  turnTimeoutMs(config),
 );
 const wsOrigin = new URL(
   config.intelligenceWsUrl ?? 'wss://realtime.intelligence.copilotkit.ai',

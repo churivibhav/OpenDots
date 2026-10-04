@@ -19,6 +19,7 @@ export interface PlatformConfig extends WebConfig {
   opencodeUsername?: string;
   opencodePassword?: string;
   opencodeModel?: string;
+  opencodeAgents?: string[];
   opencodeTimeoutMs?: number;
   slackChannel?: string;
   slackTeam?: string;
@@ -55,6 +56,9 @@ export function setupStatus(
     browser: !!(config.browserUrl && config.browserSecret),
     voice: !!(config.ttsUrl && !missing.length),
     opencode: opencodeConfigured(config),
+    opencodeAgents: opencodeConfigured(config)
+      ? (config.opencodeAgents ?? [])
+      : [],
     slack,
     missing,
   };
