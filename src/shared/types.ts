@@ -106,6 +106,7 @@ export interface SetupStatus {
   model: boolean;
   browser: boolean;
   voice: boolean;
+  opencode: boolean;
   slack: string;
   missing: string[];
 }

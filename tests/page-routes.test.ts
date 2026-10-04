@@ -16,7 +16,6 @@ function fixture(ownerToken?: string) {
   const config = { mode: 'live' as const, baseUrl: 'https://example.com' };
   const platform = new Platform(store, ws, {
     baseUrl: config.baseUrl,
-    voiceName: 'marin',
     slackUsers: [],
     runtimeUrl: '',
   });

@@ -9,7 +9,6 @@ const config: PlatformConfig = {
   model: 'fixture',
   baseUrl: 'https://example.com',
   runtimeUrl: '',
-  voiceName: 'marin',
   slackUsers: [],
 };
 it('never claims Slack online without a complete managed channel declaration', () => {
@@ -34,8 +33,7 @@ it('requires Intelligence and model setup and disables voice when either is abse
     setupStatus({
       ...config,
       intelligenceKey: '',
-      voiceKey: 'fixture',
-      voiceModel: 'fixture',
+      ttsUrl: 'http://127.0.0.1:5150',
     }),
   ).toMatchObject({ missing: ['INTELLIGENCE_API_KEY'], voice: false });
 });
@@ -50,4 +48,15 @@ it('reports activation failure until the SDK recovers online', () => {
     'activation_failed',
   );
   expect(setupStatus(declared, 'online', true).slack).toBe('online');
+});
+it('reports OpenCode only with a URL and password, and voice only with TTS', () => {
+  expect(setupStatus(config)).toMatchObject({ opencode: false, voice: false });
+  expect(
+    setupStatus({
+      ...config,
+      opencodeUrl: 'https://opencode.example',
+      opencodePassword: 'fixture',
+      ttsUrl: 'http://127.0.0.1:5150',
+    }),
+  ).toMatchObject({ opencode: true, voice: true });
 });

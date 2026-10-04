@@ -284,7 +284,7 @@ export function Chat({
             title={
               voiceReady
                 ? 'Talk with your Dot'
-                : 'Voice setup requires VOICE_API_KEY and VOICE_MODEL'
+                : 'Voice setup requires VOICE_TTS_URL'
             }
             disabled={!voiceReady || paused || !loaded || !contextReady}
             onClick={() =>

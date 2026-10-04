@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenDots assistant
+After=network-online.target tailscaled.service piper-tts.service
+Wants=network-online.target
+
+[Service]
+User=opendots
+WorkingDirectory=/opt/opendots
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --env-file=/opt/opendots/.env dist/server/server/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

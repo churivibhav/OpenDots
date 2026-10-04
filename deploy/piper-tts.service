@@ -1,0 +1,14 @@
+[Unit]
+Description=Piper text-to-speech HTTP server
+After=network.target
+
+[Service]
+User=opendots
+WorkingDirectory=/opt/piper
+ExecStart=/opt/piper/bin/python -m piper.http_server -m en_US-lessac-medium --data-dir /opt/piper/voices --host 127.0.0.1 --port 5150
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
