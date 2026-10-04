@@ -111,7 +111,6 @@ function fixture(channel = true) {
       model: 'fixture',
       baseUrl: 'https://unused.invalid',
       runtimeUrl: '',
-      voiceName: 'marin',
       slackUsers: [],
     },
     dot.id,

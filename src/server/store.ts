@@ -31,6 +31,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, taskId TEXT NOT NULL, status TEXT NOT NULL, startedAt INTEGER NOT NULL, finishedAt INTEGER, result TEXT, error TEXT);
       CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, taskId TEXT NOT NULL, runId TEXT, text TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS opencode_sessions (threadId TEXT PRIMARY KEY, sessionId TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS tasks_due ON tasks(status, nextRunAt);
       CREATE INDEX IF NOT EXISTS runs_task ON runs(taskId, startedAt);
       CREATE INDEX IF NOT EXISTS events_task ON events(taskId, id);`);
@@ -51,6 +52,17 @@ export class Store {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+  opencodeSession(threadId: string): string | undefined {
+    const row = this.db
+      .prepare('SELECT sessionId FROM opencode_sessions WHERE threadId=?')
+      .get(threadId) as { sessionId: string } | undefined;
+    return row?.sessionId;
+  }
+  setOpencodeSession(threadId: string, sessionId: string) {
+    this.db
+      .prepare('INSERT OR REPLACE INTO opencode_sessions VALUES (?, ?, ?)')
+      .run(threadId, sessionId, Date.now());
   }
   settings(): Settings {
     const row = this.db

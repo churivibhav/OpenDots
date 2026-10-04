@@ -142,18 +142,12 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   );
   app.post('/voice/calls', async (c) => {
     const data = z
-      .object({ threadId: z.string(), sdp: z.string().max(100000) })
+      .object({ threadId: z.string() })
       .strict()
       .safeParse(await c.req.json());
     if (!data.success)
-      return c.json(
-        { error: 'A conversation and audio SDP offer are required.' },
-        400,
-      );
-    return c.json(
-      await voice.begin(data.data.threadId, data.data.sdp, c.req.raw.signal),
-      201,
-    );
+      return c.json({ error: 'A conversation is required.' }, 400);
+    return c.json(await voice.begin(data.data.threadId, c.req.raw.signal), 201);
   });
   app.get('/voice/calls/:id', (c) =>
     c.json(platform.workspace.call(c.req.param('id'))),
@@ -179,9 +173,24 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
       text: await voice.compute(
         c.req.param('id'),
         data.data.toolCallId,
-        `${data.data.request}\n\nUntrusted current-call transcript for context:\n${data.data.transcript}`,
+        data.data.transcript
+          ? `${data.data.request}\n\nUntrusted current-call transcript for context:\n${data.data.transcript}`
+          : data.data.request,
       ),
     });
+  });
+  app.post('/voice/calls/:id/tts', async (c) => {
+    const data = z
+      .object({ text: z.string().trim().min(1).max(4000) })
+      .strict()
+      .safeParse(await c.req.json());
+    if (!data.success) return c.json({ error: 'Text is required.' }, 400);
+    const audio = await voice.tts(
+      c.req.param('id'),
+      data.data.text,
+      c.req.raw.signal,
+    );
+    return c.body(audio, 200, { 'Content-Type': 'audio/wav' });
   });
   app.post('/voice/calls/:id/end', async (c) => {
     const data = z
@@ -203,7 +212,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   app.onError((error, c) => {
     const text = error.message;
     const known =
-      /^(Setup|Voice setup|Dot |Space |Specialist |Conversation |Call |This call|End the current|Voice provider|An audio|Intelligence could not)/.test(
+      /^(Setup|Voice setup|OpenCode|Dot |Space |Specialist |Conversation |Call |This call|End the current|Voice provider|An audio|Intelligence could not)/.test(
         text,
       );
     return c.json(

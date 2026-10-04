@@ -1,5 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, authHeaders } from './api';
+
+// Minimal Web Speech API surface; lib.dom does not ship these types.
+interface Recognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  abort(): void;
+  onresult: ((event: RecognitionEvent) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onend: (() => void) | null;
+}
+interface RecognitionEvent {
+  resultIndex: number;
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+}
+type RecognitionConstructor = new () => Recognition;
+function recognitionConstructor(): RecognitionConstructor | undefined {
+  const scope = window as unknown as {
+    SpeechRecognition?: RecognitionConstructor;
+    webkitSpeechRecognition?: RecognitionConstructor;
+  };
+  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition;
+}
+
+// Cascaded voice: browser speech recognition, a Dot turn per utterance, and
+// server-side TTS playback.
 export function useVoice(
   threadId: string,
   onSaved: () => void,
@@ -22,29 +49,55 @@ export function useVoice(
   const [userCaption, setUserCaption] = useState('');
   const session = useRef<
     | {
-        pc: RTCPeerConnection;
-        stream: MediaStream;
-        audio: HTMLAudioElement;
         id?: string;
-        channel: RTCDataChannel;
+        recognition: Recognition;
+        audio: HTMLAudioElement;
         transcript: string[];
-        timer?: ReturnType<typeof setTimeout>;
         cancelled: boolean;
+        muted: boolean;
+        speakerMuted: boolean;
+        // Recognition is paused while the Dot thinks or speaks, to avoid
+        // transcribing its own voice.
+        busy: boolean;
+        listening: boolean;
+        pending: string[];
       }
     | undefined
   >(undefined);
   const anchor = useRef(anchorMessageId);
   anchor.current = anchorMessageId;
+  const listen = useCallback(() => {
+    const current = session.current;
+    if (
+      !current ||
+      current.cancelled ||
+      current.muted ||
+      current.busy ||
+      current.listening
+    )
+      return;
+    try {
+      current.recognition.start();
+      current.listening = true;
+    } catch {
+      // Already started; onend will retry.
+    }
+  }, []);
+  const stopListening = useCallback(() => {
+    const current = session.current;
+    if (!current?.listening) return;
+    current.listening = false;
+    current.recognition.abort();
+  }, []);
   const closeMedia = useCallback(() => {
     const current = session.current;
     if (!current) return;
     current.cancelled = true;
-    current.stream.getTracks().forEach((track) => track.stop());
-    current.channel.close();
-    current.pc.close();
+    current.recognition.onend = null;
+    current.recognition.abort();
     current.audio.pause();
-    current.audio.srcObject = null;
-    clearTimeout(current.timer);
+    if (current.audio.src) URL.revokeObjectURL(current.audio.src);
+    current.audio.removeAttribute('src');
   }, []);
   const end = useCallback(async () => {
     if (ending.current) return;
@@ -55,14 +108,7 @@ export function useVoice(
       setStatus('idle');
       return;
     }
-    // Silence the call immediately, while keeping the peer alive until the
-    // provider confirms hangup through the server.
-    current.cancelled = true;
-    current.stream.getTracks().forEach((track) => {
-      track.enabled = false;
-    });
-    current.audio.pause();
-    clearTimeout(current.timer);
+    closeMedia();
     ending.current = true;
     setStatus('ending');
     try {
@@ -79,7 +125,6 @@ export function useVoice(
           : 'Call ended, but its receipt could not be saved.',
       );
     } finally {
-      closeMedia();
       session.current = undefined;
       ending.current = false;
       setStatus('idle');
@@ -120,9 +165,77 @@ export function useVoice(
           });
     }, 2000);
     return () => clearInterval(timer);
-  }, [status, closeMedia, onSaved, end]);
+  }, [status, end]);
+  const speak = useCallback(async (text: string) => {
+    const current = session.current;
+    if (!current?.id || current.cancelled || current.speakerMuted) return;
+    const response = await fetch(`/api/voice/calls/${current.id}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ text: text.slice(0, 4000) }),
+    });
+    if (!response.ok) throw new Error('Speech playback failed.');
+    const blob = await response.blob();
+    if (current.cancelled || current.speakerMuted) return;
+    if (current.audio.src) URL.revokeObjectURL(current.audio.src);
+    current.audio.src = URL.createObjectURL(blob);
+    setPhase('speaking');
+    await new Promise<void>((resolve) => {
+      current.audio.onended = () => resolve();
+      current.audio.onpause = () => resolve();
+      current.audio.onerror = () => resolve();
+      current.audio.play().catch(() => {
+        if (!current.cancelled)
+          setError(
+            'Audio playback was blocked. Check your browser audio permissions.',
+          );
+        resolve();
+      });
+    });
+  }, []);
+  const respond = useCallback(
+    async (request: string) => {
+      const current = session.current;
+      if (!current?.id || current.cancelled) return;
+      current.busy = true;
+      stopListening();
+      setPhase('thinking');
+      setCaption('');
+      current.transcript.push(`You: ${request}`);
+      try {
+        const result = await api<{ text: string }>(
+          `/voice/calls/${current.id}/compute`,
+          'POST',
+          { toolCallId: crypto.randomUUID(), request },
+        );
+        if (current.cancelled) return;
+        current.transcript.push(`Dot: ${result.text}`);
+        setCaption(result.text);
+        await speak(result.text);
+      } catch (e) {
+        if (!current.cancelled)
+          setError(e instanceof Error ? e.message : 'The Dot could not reply.');
+      } finally {
+        current.busy = false;
+        if (!current.cancelled) {
+          setPhase('listening');
+          const next = current.pending.splice(0).join(' ');
+          if (next) void respond(next);
+          else listen();
+        }
+      }
+    },
+    [listen, speak, stopListening],
+  );
   const start = async () => {
     if (session.current || connecting.current || ending.current) return;
+    const Recognizer = recognitionConstructor();
+    if (!Recognizer) {
+      setError(
+        'Voice calls need browser speech recognition (Chrome, Edge, or Safari).',
+      );
+      return;
+    }
     connecting.current = true;
     const attempt = ++generation.current;
     setStatus('connecting');
@@ -133,172 +246,74 @@ export function useVoice(
     setPhase('listening');
     setCaption('');
     setUserCaption('');
-    let stream: MediaStream | undefined;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (attempt !== generation.current) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
+    const recognition = new Recognizer();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+    const current = {
+      id: undefined as string | undefined,
+      recognition,
+      audio: new Audio(),
+      transcript: [] as string[],
+      cancelled: false,
+      muted: false,
+      speakerMuted: false,
+      busy: false,
+      listening: false,
+      pending: [] as string[],
+    };
+    session.current = current;
+    recognition.onresult = (event) => {
+      if (current.cancelled) return;
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const text = result[0].transcript.trim();
+        if (!text) continue;
+        if (result.isFinal) {
+          setUserCaption(text);
+          if (current.busy) current.pending.push(text);
+          else void respond(text);
+        } else interim += `${text} `;
       }
-      const pc = new RTCPeerConnection();
-      const audio = new Audio();
-      audio.autoplay = true;
-      const channel = pc.createDataChannel('oai-events');
-      const current = {
-        pc,
-        audio,
-        stream,
-        channel,
-        transcript: [] as string[],
-        cancelled: false,
-        id: undefined as string | undefined,
-        timer: undefined as ReturnType<typeof setTimeout> | undefined,
-      };
-      session.current = current;
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream!));
-      pc.ontrack = (event) => {
-        if (current.cancelled) return;
-        audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
-        void audio.play().catch(() => {
-          if (!current.cancelled)
-            setError(
-              'Audio playback was blocked. Check your browser audio permissions.',
-            );
-        });
-      };
-      pc.onconnectionstatechange = () => {
-        if (current.cancelled) return;
-        if (pc.connectionState === 'connected') {
-          setStatus('active');
-          setStartedAt((value) => value ?? Date.now());
-          if (current.id)
-            void api(`/voice/calls/${current.id}/active`, 'POST', {}).catch(
-              (e) => {
-                if (!current.cancelled) setError(e.message);
-              },
-            );
-        }
-        if (['failed', 'disconnected'].includes(pc.connectionState)) {
-          setError('The voice connection dropped.');
-          void end();
-        }
-      };
-      channel.onmessage = async (event) => {
-        if (current.cancelled) return;
-        let data: Record<string, unknown>;
-        try {
-          const parsed: unknown = JSON.parse(String(event.data));
-          if (!parsed || typeof parsed !== 'object') return;
-          data = parsed as Record<string, unknown>;
-        } catch {
-          return;
-        }
-        if (data.type === 'input_audio_buffer.speech_started') {
-          setPhase('listening');
-          setCaption('');
-        }
-        if (
-          data.type === 'response.output_audio_transcript.delta' &&
-          typeof data.delta === 'string'
-        ) {
-          setPhase('speaking');
-          setCaption((text) => text + data.delta);
-        }
-        if (data.type === 'output_audio_buffer.stopped') setPhase('listening');
-        if (data.type === 'response.created') {
-          setCaption('');
-          setPhase('thinking');
-        }
-        if (typeof data.transcript === 'string') {
-          if (
-            data.type ===
-            'conversation.item.input_audio_transcription.completed'
-          ) {
-            current.transcript.push(`You: ${data.transcript}`);
-            setUserCaption(data.transcript);
-          }
-          if (data.type === 'response.output_audio_transcript.done')
-            current.transcript.push(`Dot: ${data.transcript}`);
-        }
-        if (data.type === 'error')
-          setError(
-            'The voice provider reported a session error. End the call and retry.',
-          );
-        if (
-          data.type !== 'response.function_call_arguments.done' ||
-          data.name !== 'ask_compute' ||
-          typeof data.call_id !== 'string' ||
-          !current.id
-        )
-          return;
-        let output: string;
-        setPhase('thinking');
-        try {
-          const args: unknown = JSON.parse(String(data.arguments));
-          if (
-            !args ||
-            typeof args !== 'object' ||
-            !('request' in args) ||
-            typeof args.request !== 'string'
-          )
-            throw new Error('Invalid compute request.');
-          const result = await api<{ text: string }>(
-            `/voice/calls/${current.id}/compute`,
-            'POST',
-            {
-              toolCallId: data.call_id,
-              request: args.request,
-              transcript: current.transcript.join('\n').slice(-12000),
-            },
-          );
-          output = result.text;
-        } catch (e) {
-          output = `Compute failed: ${e instanceof Error ? e.message : 'Unknown error'}`;
-        }
-        if (!current.cancelled && channel.readyState === 'open') {
-          channel.send(
-            JSON.stringify({
-              type: 'conversation.item.create',
-              item: {
-                type: 'function_call_output',
-                call_id: data.call_id,
-                output,
-              },
-            }),
-          );
-          channel.send(JSON.stringify({ type: 'response.create' }));
-        }
-      };
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const response = await api<{ id: string; sdp: string }>(
-        '/voice/calls',
-        'POST',
-        { threadId, sdp: offer.sdp },
-      );
+      if (interim) setUserCaption(interim.trim());
+    };
+    recognition.onerror = (event) => {
+      if (current.cancelled) return;
+      if (['not-allowed', 'service-not-allowed'].includes(event.error)) {
+        setError('Microphone access was denied.');
+        void end();
+      } else if (!['no-speech', 'aborted'].includes(event.error))
+        setError(`Speech recognition error: ${event.error}.`);
+    };
+    recognition.onend = () => {
+      current.listening = false;
+      // Browsers stop recognition after silence; keep the call hands-free.
+      if (!current.cancelled) setTimeout(listen, 250);
+    };
+    try {
+      const response = await api<{ id: string }>('/voice/calls', 'POST', {
+        threadId,
+      });
       current.id = response.id;
-      if (current.cancelled) {
+      if (current.cancelled || attempt !== generation.current) {
         await api(`/voice/calls/${response.id}/end`, 'POST', {
           transcript: '',
         });
         return;
       }
-      await pc.setRemoteDescription({ type: 'answer', sdp: response.sdp });
-      if (current.cancelled) return;
-      current.timer = setTimeout(() => void end(), 15 * 60_000);
+      await api(`/voice/calls/${response.id}/active`, 'POST', {});
+      setStatus('active');
+      setStartedAt(Date.now());
+      listen();
     } catch (e) {
-      if (attempt !== generation.current) {
-        stream?.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      const current = session.current;
-      const id = current?.id;
+      if (attempt !== generation.current) return;
+      const id = current.id;
       if (id)
         void api(`/voice/calls/${id}/end`, 'POST', {
           transcript: '',
           anchorMessageId: anchor.current,
         }).catch(() => {});
-      stream?.getTracks().forEach((track) => track.stop());
       closeMedia();
       session.current = undefined;
       setStatus('idle');
@@ -309,16 +324,25 @@ export function useVoice(
   };
   const toggleMute = () => {
     const next = !muted;
-    session.current?.stream.getAudioTracks().forEach((track) => {
-      track.enabled = !next;
-    });
+    const current = session.current;
+    if (current) {
+      current.muted = next;
+      if (next) stopListening();
+      else listen();
+    }
     setMuted(next);
   };
   const toggleSpeaker = () => {
     const next = !speakerMuted;
-    if (session.current) session.current.audio.muted = next;
+    const current = session.current;
+    if (current) {
+      current.speakerMuted = next;
+      if (next) current.audio.pause();
+    }
     setSpeakerMuted(next);
   };
+  // Stop the Dot mid-sentence so the user can speak.
+  const interrupt = () => session.current?.audio.pause();
   return {
     status,
     error,
@@ -332,5 +356,6 @@ export function useVoice(
     userCaption,
     toggleMute,
     toggleSpeaker,
+    interrupt,
   };
 }

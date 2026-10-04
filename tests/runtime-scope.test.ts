@@ -36,7 +36,6 @@ it('blocks unbound cross-Dot run and inspector routes before contacting Intellig
 it('reports setup honestly without a standalone agent fallback', () => {
   const status = setupStatus({
     baseUrl: '',
-    voiceName: 'marin',
     slackUsers: [],
     runtimeUrl: '',
   });

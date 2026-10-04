@@ -60,7 +60,11 @@ export function CallView({
           {minimized ? <Maximize2 size={18} /> : <ChevronDown size={20} />}
         </button>
       </div>
-      <div className={`call-persona ${voice.phase}`}>
+      <div
+        className={`call-persona ${voice.phase}`}
+        onClick={voice.phase === 'speaking' ? voice.interrupt : undefined}
+        title={voice.phase === 'speaking' ? 'Tap to interrupt' : undefined}
+      >
         <Mascot identity={dot.id} name={dot.name} />
         <h2>{dot.name}</h2>
         <span className="call-timer" aria-label="Call duration">

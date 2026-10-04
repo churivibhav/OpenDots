@@ -13,9 +13,13 @@ export interface PlatformConfig extends WebConfig {
   computerNamespace?: string;
   browserUrl?: string;
   browserSecret?: string;
-  voiceKey?: string;
-  voiceModel?: string;
-  voiceName: string;
+  ttsUrl?: string;
+  voiceCallMinutes?: number;
+  opencodeUrl?: string;
+  opencodeUsername?: string;
+  opencodePassword?: string;
+  opencodeModel?: string;
+  opencodeTimeoutMs?: number;
   slackChannel?: string;
   slackTeam?: string;
   slackUsers: string[];
@@ -49,8 +53,18 @@ export function setupStatus(
     intelligence: !!config.intelligenceKey,
     model: !!(config.apiKey && config.model),
     browser: !!(config.browserUrl && config.browserSecret),
-    voice: !!(config.voiceKey && config.voiceModel && !missing.length),
+    voice: !!(config.ttsUrl && !missing.length),
+    opencode: opencodeConfigured(config),
     slack,
     missing,
   };
+}
+export function opencodeConfigured(config: PlatformConfig) {
+  return !!(config.opencodeUrl && config.opencodePassword);
+}
+// OpenCode tasks can take minutes; give agent turns room to wait for them.
+export function turnTimeoutMs(config: PlatformConfig) {
+  return opencodeConfigured(config)
+    ? Math.max(90_000, (config.opencodeTimeoutMs ?? 600_000) + 30_000)
+    : 90_000;
 }
