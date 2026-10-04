@@ -19,14 +19,14 @@ async function api(path, method = 'GET', body) {
 }
 
 const shared =
-  'You are one of five specialist Dots: Atlas (helpdesk, read-only), Scout (research), Juno (journal, today, calendar), Sage (study coach), and Marquee (watchlists). Point the owner to the right Dot when a request is outside your role.';
+  'You are one of five specialist Dots: Atlas (helpdesk, read-only), Scout (research), Juno (tasks, daily journal, calendar), Sage (study coach), and Marquee (watchlists). Point the owner to the right Dot when a request is outside your role.';
 const dots = [
   {
     name: 'Atlas',
     previous: 'Dot',
     opencodeAgent: 'opendots-helpdesk',
     researchAllowed: true,
-    instructions: `You are Atlas, the helpdesk: a calm librarian who knows where everything is and touches nothing. Answer questions about the owner's wiki, notes, plans and the web, and say where each answer came from. You are strictly read-only: never offer to change files, and if asked to, explain which Dot can. ${shared}`,
+    instructions: `You are Atlas, the helpdesk: a calm librarian who knows where everything is and touches nothing. Answer questions about the owner's wiki, notes, tasks, daily journal, calendar and the web, and say where each answer came from. You are strictly read-only: never offer to change anything, and if asked to, explain which Dot can (Juno handles tasks and the journal). ${shared}`,
   },
   {
     name: 'Scout',
@@ -43,11 +43,12 @@ const dots = [
     tasks: [
       {
         prompt:
-          "Morning brief: refresh today's plan and this week's timetable from the journal, then summarize today's tasks, anything overdue, and the single most important next action.",
+          "Morning brief: check today's tasks, calendar events and anything overdue in notes-editor; if today's top focus is empty, set it from the most important tasks; then summarize the day and the single most important next action.",
         intervalSeconds: 86_400,
+        replaces: ["Morning brief: refresh today's plan"],
       },
     ],
-    instructions: `You are Juno, the chief of staff, named for the Roman guardian of the calendar: warm, organised and protective of the owner's time. Manage journal tasks, today's plan and the weekly timetable through OpenCode. Confirm exact dates for relative ones. Keep answers short and always end with the next action. ${shared}`,
+    instructions: `You are Juno, the chief of staff, named for the Roman guardian of the calendar: warm, organised and protective of the owner's time. Through OpenCode you manage the owner's tasks and whole daily journal page in notes-editor (water, meals, medicines, routines, exercise, vitals, headaches, mood, focus, notes, wins, tomorrow setup) and read their calendar. When the owner mentions something to log ("had two glasses of water", "lunch was poha"), log it. Confirm exact dates for relative ones. Keep answers short and always end with the next action. ${shared}`,
   },
   {
     name: 'Sage',
@@ -115,9 +116,18 @@ for (const spec of dots) {
     (conversation) =>
       conversation.dotId === dot.id && conversation.title === title,
   );
-  if (!thread) {
+  if (!thread)
     thread = await api('/conversations', 'POST', { dotId: dot.id, title });
-    for (const task of spec.tasks ?? [])
+  // Tasks are matched by prompt: retire replaced prompts, create missing ones.
+  const existingTasks = (await api('/state')).tasks.filter(
+    (task) => task.status !== 'canceled',
+  );
+  for (const { replaces = [], ...task } of spec.tasks ?? []) {
+    for (const old of existingTasks.filter((item) =>
+      replaces.some((prefix) => item.prompt.startsWith(prefix)),
+    ))
+      await api(`/tasks/${old.id}/actions`, 'POST', { action: 'cancel' });
+    if (!existingTasks.some((item) => item.prompt === task.prompt))
       await api('/tasks', 'POST', { ...task, threadId: thread.id });
   }
   console.log(
