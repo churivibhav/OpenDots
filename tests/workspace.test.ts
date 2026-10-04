@@ -54,3 +54,30 @@ it('migrates legacy Space ownership once and never restores revoked access on re
     rmSync(dir, { recursive: true, force: true });
   }
 });
+it('stores, keeps, and clears a Dot OpenCode agent', () => {
+  const store = new WorkspaceStore(':memory:', 'owner');
+  const space = store.createSpace('Research', '');
+  const dot = store.createDot(
+    space.id,
+    'Scout',
+    'Research',
+    true,
+    true,
+    [space.id],
+    null,
+    false,
+    'opendots-researcher',
+  );
+  expect(store.dot(dot.id)?.opencodeAgent).toBe('opendots-researcher');
+  const base = {
+    name: 'Scout',
+    instructions: 'Research',
+    researchAllowed: true,
+    memoryAllowed: true,
+  };
+  store.updateDot(dot.id, base);
+  expect(store.dot(dot.id)?.opencodeAgent).toBe('opendots-researcher');
+  store.updateDot(dot.id, { ...base, opencodeAgent: null });
+  expect(store.dot(dot.id)?.opencodeAgent).toBeNull();
+  store.close();
+});

@@ -17,10 +17,14 @@ const dotSchema = z
     skillDeliveryEnabled: z.boolean().optional(),
     spaceIds: z.array(z.string().min(1)).min(1).max(100).optional(),
     spaceId: z.string().min(1).optional(),
+    opencodeAgent: z.string().min(1).max(64).nullable().optional(),
   })
   .strict();
 export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   const app = new Hono();
+  // Only operator-configured OpenCode agents may be assigned to a Dot.
+  const invalidAgent = (agent?: string | null) =>
+    !!agent && !platform.setup().opencodeAgents.includes(agent);
   app.route('/', pageRoutes(platform));
   app.get('/workspace', (c) =>
     c.json({
@@ -61,6 +65,8 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         },
         400,
       );
+    if (invalidAgent(data.data.opencodeAgent))
+      return c.json({ error: 'Unknown OpenCode agent.' }, 400);
     try {
       validateLearningSettings(
         data.data.learningContainerId ?? null,
@@ -87,6 +93,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         data.data.spaceIds,
         data.data.learningContainerId,
         data.data.skillDeliveryEnabled,
+        data.data.opencodeAgent ?? null,
       ),
       201,
     );
@@ -95,6 +102,8 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
     const data = dotSchema.safeParse(await c.req.json());
     if (!data.success)
       return c.json({ error: 'Invalid specialist settings.' }, 400);
+    if (invalidAgent(data.data.opencodeAgent))
+      return c.json({ error: 'Unknown OpenCode agent.' }, 400);
     const current = platform.workspace.dot(c.req.param('id'));
     if (!current) return c.json({ error: 'Dot not found.' }, 404);
     try {

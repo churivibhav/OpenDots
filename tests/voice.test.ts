@@ -44,6 +44,7 @@ function fixture() {
       setup: () => ({
         voice: true,
         opencode: false,
+        opencodeAgents: [],
         intelligence: true,
         model: true,
         browser: false,

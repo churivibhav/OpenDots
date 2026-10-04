@@ -89,3 +89,11 @@ describe('durable task lifecycle', () => {
     ).toBe(true);
   });
 });
+it('leases claimed work for the requested duration', () => {
+  const store = new Store(':memory:');
+  store.createTask('Long research');
+  const claim = store.claim(1_000, 600_000)!;
+  expect(claim.leaseUntil).toBe(601_000);
+  expect(store.claim(500_000)).toBeNull();
+  store.close();
+});

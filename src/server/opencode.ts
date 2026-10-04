@@ -53,6 +53,7 @@ export class OpenCodeClient {
     threadId: string,
     task: string,
     signal: AbortSignal,
+    agent: string,
     fresh = false,
   ) {
     const sessionId = await this.session(threadId, fresh, signal);
@@ -72,6 +73,7 @@ export class OpenCodeClient {
       const result = (await this.request(
         `/session/${sessionId}/message`,
         {
+          agent,
           parts: [{ type: 'text', text: task }],
           ...(model.length
             ? { model: { providerID, modelID: model.join('/') } }

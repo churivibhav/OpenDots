@@ -7,7 +7,8 @@ cd "$(dirname "$0")"
 npm ci
 npm run build
 rsync -az --delete --exclude .env --exclude data --exclude node_modules \
-  dist package.json package-lock.json deploy "$PI:/tmp/opendots-release/"
+  dist package.json package-lock.json deploy scripts compose.computers.yml \
+  deployment "$PI:/tmp/opendots-release/"
 ssh -t "$PI" 'set -e
   sudo rsync -a --delete --exclude .env --exclude data --exclude node_modules /tmp/opendots-release/ /opt/opendots/
   sudo cp /opt/opendots/deploy/*.service /etc/systemd/system/
