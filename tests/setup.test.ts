@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import {
+  INTELLIGENCE_KEY_MISSING_LABEL,
   setupStatus,
   type PlatformConfig,
 } from '../src/server/platform-config.js';
@@ -35,7 +36,10 @@ it('requires Intelligence and model setup and disables voice when either is abse
       intelligenceKey: '',
       ttsUrl: 'http://127.0.0.1:5150',
     }),
-  ).toMatchObject({ missing: ['INTELLIGENCE_API_KEY'], voice: false });
+  ).toMatchObject({
+    missing: [INTELLIGENCE_KEY_MISSING_LABEL],
+    voice: false,
+  });
 });
 it('reports activation failure until the SDK recovers online', () => {
   const declared = {

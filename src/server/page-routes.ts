@@ -17,9 +17,14 @@ export function pageRoutes(platform: Platform) {
         { error: 'This Dot no longer has access to the selected Space.' },
         403,
       );
-    return c.json(
-      platform.workspace.pages.get(receipt.spaceId, receipt.pageId),
-    );
+    const { pageId, spaceId, draft: reviewDraft } = receipt;
+    // The receipt outlives its page so a retried approval cannot recreate it.
+    if (!platform.workspace.pages.exists(spaceId, pageId))
+      return c.json({ deleted: true, pageId, spaceId, reviewDraft });
+    return c.json({
+      ...platform.workspace.pages.get(spaceId, pageId),
+      reviewDraft,
+    });
   });
   app.post('/conversations/:id/reviewed-page', async (c) => {
     const data = pageReviewSchema
@@ -92,6 +97,15 @@ export function pageRoutes(platform: Platform) {
       ),
     );
   });
+  app.delete('/spaces/:spaceId/pages/:id', (c) => {
+    const deleted = platform.workspace.pages.delete(
+      c.req.param('spaceId'),
+      c.req.param('id'),
+    );
+    if (!deleted)
+      return c.json({ error: 'Page not found in this Space.' }, 404);
+    return c.json({ ok: true });
+  });
   app.post('/spaces/:spaceId/pages/:id/conversation', async (c) => {
     const data = z
       .object({ dotId: z.string().min(1) })
@@ -130,13 +144,16 @@ export function pageRoutes(platform: Platform) {
       ? c.json({ error: 'Invalid JSON request.' }, 400)
       : error instanceof PageError
         ? c.json({ error: error.message }, error.status)
-        : c.json(
-            {
-              error:
-                'Page operation could not complete. Check Intelligence setup or retry; your draft has not been discarded.',
-            },
-            503,
-          ),
+        : error.message ===
+            'Conversation does not belong to this Dot and owner.'
+          ? c.json({ error: error.message }, 404)
+          : c.json(
+              {
+                error:
+                  'Page operation could not complete. Check Intelligence setup or retry; your draft has not been discarded.',
+              },
+              503,
+            ),
   );
   return app;
 }

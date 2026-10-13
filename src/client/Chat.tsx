@@ -1,5 +1,10 @@
 import { PageReviewCard } from './PageReviewCard';
 import { pageReviewSchema, pageReviewTool } from '../shared/page-review';
+import {
+  connectionActionSchema,
+  connectionActionTool,
+} from '../shared/connection-types';
+import { ConnectionActionCard } from './ConnectionActionCard';
 import { contextualMessage, type PageContext } from './page-context';
 import { api } from './api';
 import type { Page } from '../server/pages';
@@ -30,6 +35,8 @@ import type { CallReceipt, Conversation, Dot } from '../shared/types';
 import { Mascot } from './Mascot';
 import { useVoice } from './useVoice';
 import { CallView } from './CallView';
+import { shouldSubmitComposerOnKeyDown } from './chat-composer';
+
 export function Chat({
   thread,
   dot,
@@ -178,6 +185,17 @@ export function Chat({
     },
     [thread.id, onSaved],
   );
+  useHumanInTheLoop(
+    {
+      name: connectionActionTool.name,
+      description: connectionActionTool.description,
+      parameters: connectionActionSchema,
+      render: (props) => (
+        <ConnectionActionCard {...props} threadId={thread.id} />
+      ),
+    },
+    [thread.id],
+  );
   const computerCalls = agent.messages.flatMap((message) =>
     message.role === 'assistant' ? (message.toolCalls ?? []) : [],
   );
@@ -219,7 +237,8 @@ export function Chat({
           message.toolCalls?.some(
             (call) =>
               call.function.name.startsWith('computer_') ||
-              call.function.name === pageReviewTool.name,
+              call.function.name === pageReviewTool.name ||
+              call.function.name === connectionActionTool.name,
           ))),
   );
   return (
@@ -416,7 +435,7 @@ export function Chat({
             maxLength={4000}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (shouldSubmitComposerOnKeyDown(e)) {
                 e.preventDefault();
                 e.currentTarget.form?.requestSubmit();
               }

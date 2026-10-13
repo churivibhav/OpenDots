@@ -27,9 +27,9 @@ export class Runner {
     this.timer = undefined;
     for (const task of this.store.tasks()) {
       if (this.active.has(task.id) && task.lease)
-        this.store.release(
+        this.store.interrupt(
           { ...task, lease: task.lease },
-          'Server stopping; queued for restart.',
+          'Server stopped during this run. Review completed effects before retrying.',
         );
     }
     this.abortAll();
@@ -42,6 +42,17 @@ export class Runner {
       controller.abort(new Error('Run stopped because settings changed.'));
   }
   async tick() {
+    try {
+      await this.runTick();
+    } catch {
+      // Store errors must not become unhandled interval promise rejections.
+      // Do not log task content, provider responses, or database details.
+      console.error(
+        'Background runner tick failed; will retry on the next tick.',
+      );
+    }
+  }
+  private async runTick() {
     if (this.active.size) return;
     // Keep the lease beyond the run timeout so live runs are never retried.
     const claim = this.store.claim(
@@ -52,8 +63,12 @@ export class Runner {
     const controller = new AbortController();
     this.active.set(claim.id, controller);
     const ownershipCheck = setInterval(() => {
-      if (!this.store.owns(claim))
-        controller.abort(new Error('Run permission or lease was revoked.'));
+      try {
+        if (!this.store.owns(claim))
+          controller.abort(new Error('Run permission or lease was revoked.'));
+      } catch {
+        controller.abort(new Error('Run ownership check failed.'));
+      }
     }, 100);
     const timeout = setTimeout(
       () =>

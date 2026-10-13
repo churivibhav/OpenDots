@@ -138,3 +138,33 @@ it('defers paused transcript synchronization and resumes it once without a dupli
   expect(f.turn).toHaveBeenCalledTimes(1);
   expect(f.workspace.call(call.id).status).toBe('failed');
 });
+it('allows a rejected compute call to be retried with the same utterance ID', async () => {
+  const f = fixture();
+  const call = await f.voice.begin('thread', signal());
+  f.voice.activate(call.id);
+  f.turn.mockRejectedValueOnce(new Error('Provider unavailable'));
+  await expect(f.voice.compute(call.id, 'retry', 'Research')).rejects.toThrow(
+    'Provider unavailable',
+  );
+  await expect(f.voice.compute(call.id, 'retry', 'Research')).resolves.toBe(
+    'Current answer',
+  );
+  expect(f.turn).toHaveBeenCalledTimes(2);
+  await f.voice.end(call.id, '');
+});
+it('counts failed compute attempts toward the 100-turn limit', async () => {
+  const f = fixture();
+  const call = await f.voice.begin('thread', signal());
+  f.voice.activate(call.id);
+  for (let i = 0; i < 100; i++) {
+    f.turn.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(f.voice.compute(call.id, 'same', 'Research')).rejects.toThrow(
+      'Provider unavailable',
+    );
+  }
+  await expect(f.voice.compute(call.id, 'same', 'Research')).rejects.toThrow(
+    '100-turn limit',
+  );
+  expect(f.turn).toHaveBeenCalledTimes(100);
+  await f.voice.end(call.id, '');
+});

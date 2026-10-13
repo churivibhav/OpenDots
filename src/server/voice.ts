@@ -8,6 +8,7 @@ export class VoiceService {
     {
       controller: AbortController;
       calls: Map<string, Promise<string>>;
+      attempts: number;
       deadline: ReturnType<typeof setTimeout>;
     }
   >();
@@ -47,7 +48,12 @@ export class VoiceService {
       void this.expire(call.id, 'Call connection expired before activation.');
     }, 30_000);
     deadline.unref();
-    this.jobs.set(call.id, { controller, calls: new Map(), deadline });
+    this.jobs.set(call.id, {
+      controller,
+      calls: new Map(),
+      attempts: 0,
+      deadline,
+    });
     return { id: call.id };
   }
   activate(id: string) {
@@ -73,7 +79,7 @@ export class VoiceService {
     if (!job) throw new Error('Call session expired; start a new call.');
     const existing = job.calls.get(toolCallId);
     if (existing) return existing;
-    if (job.calls.size >= 100)
+    if (job.attempts >= 100)
       throw new Error(
         'This call reached its 100-turn limit. Start another call to continue.',
       );
@@ -85,8 +91,16 @@ export class VoiceService {
         AbortSignal.timeout(turnTimeoutMs(this.platform.config)),
       ]),
     );
+    job.attempts += 1;
     job.calls.set(toolCallId, pending);
-    return pending;
+    try {
+      return await pending;
+    } catch (error) {
+      // Deduplicate in-flight and successful turns, and let a failed turn retry under the same ID.
+      // Every attempt still counts toward the turn cap.
+      job.calls.delete(toolCallId);
+      throw error;
+    }
   }
   async tts(id: string, text: string, signal: AbortSignal) {
     this.requireCall(id);

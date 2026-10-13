@@ -30,6 +30,10 @@ const mobile =
   /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 // How long the speaker must pause before their words are sent.
 const pauseMs = 1500;
+// A single failed control poll is usually a network flap, not a dead call.
+// Only treat the control connection as lost after this many consecutive
+// poll failures.
+const CONTROL_POLL_FAILURE_LIMIT = 3;
 
 // Cascaded voice: browser speech recognition, a Dot turn per utterance, and
 // server-side TTS playback.
@@ -60,6 +64,7 @@ export function useVoice(
         audio: HTMLAudioElement;
         transcript: string[];
         cancelled: boolean;
+        controlPollFailures: number;
         muted: boolean;
         speakerMuted: boolean;
         // Recognition is paused while the Dot thinks or speaks, to avoid
@@ -166,10 +171,18 @@ export function useVoice(
       if (id)
         void api<{ endedAt: number | null }>(`/voice/calls/${id}`)
           .then((call) => {
-            if (session.current === current && call.endedAt) void end();
+            if (session.current !== current) return;
+            if (call.endedAt) {
+              void end();
+              return;
+            }
+            current.controlPollFailures = 0;
           })
           .catch(() => {
-            if (session.current !== current) return;
+            if (session.current !== current || !current) return;
+            current.controlPollFailures += 1;
+            if (current.controlPollFailures < CONTROL_POLL_FAILURE_LIMIT)
+              return;
             setError('Call control connection was lost.');
             void end();
           });
@@ -268,6 +281,7 @@ export function useVoice(
       audio: new Audio(),
       transcript: [] as string[],
       cancelled: false,
+      controlPollFailures: 0,
       muted: false,
       speakerMuted: false,
       busy: false,

@@ -1,3 +1,4 @@
+import { setupInputSchema } from './setup-telemetry.js';
 import { pageRoutes } from './page-routes.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -26,6 +27,22 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   const invalidAgent = (agent?: string | null) =>
     !!agent && !platform.setup().opencodeAgents.includes(agent);
   app.route('/', pageRoutes(platform));
+  app.post('/setup-telemetry', async (c) => {
+    const parsed = setupInputSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
+    if (!parsed.success) return c.json({ error: 'Invalid setup event.' }, 400);
+    const event = parsed.data;
+    if (
+      event.kind === 'step_viewed' &&
+      event.step !== 'settings' &&
+      event.step !==
+        (platform.setup().missing.length ? 'setup_required' : 'ready')
+    )
+      return c.json({ error: 'Setup step does not match server state.' }, 400);
+    platform.setupTelemetry.capture(event);
+    return c.json({ ok: true });
+  });
   app.get('/workspace', (c) =>
     c.json({
       spaces: platform.workspace.spaces(),
@@ -42,7 +59,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         description: z.string().max(500).default(''),
       })
       .strict()
-      .safeParse(await c.req.json());
+      .safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json(
         { error: 'Enter a Space name (up to 60 characters).' },
@@ -56,7 +73,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   app.post('/dots', async (c) => {
     const data = dotSchema
       .extend({ spaceId: z.string() })
-      .safeParse(await c.req.json());
+      .safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json(
         {
@@ -99,7 +116,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
     );
   });
   app.put('/dots/:id', async (c) => {
-    const data = dotSchema.safeParse(await c.req.json());
+    const data = dotSchema.safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json({ error: 'Invalid specialist settings.' }, 400);
     if (invalidAgent(data.data.opencodeAgent))
@@ -133,7 +150,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         title: z.string().trim().min(1).max(120).default('A new thought'),
       })
       .strict()
-      .safeParse(await c.req.json());
+      .safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json({ error: 'Select a Dot and a conversation title.' }, 400);
     if (platform.setup().missing.length)
@@ -153,7 +170,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
     const data = z
       .object({ threadId: z.string() })
       .strict()
-      .safeParse(await c.req.json());
+      .safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json({ error: 'A conversation is required.' }, 400);
     return c.json(await voice.begin(data.data.threadId, c.req.raw.signal), 201);
@@ -172,7 +189,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         transcript: z.string().max(12000).default(''),
       })
       .strict()
-      .safeParse(await c.req.json());
+      .safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json(
         { error: 'A bounded compute request and tool call ID are required.' },
@@ -208,7 +225,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         anchorMessageId: z.string().max(200).optional(),
       })
       .strict()
-      .safeParse(await c.req.json());
+      .safeParse(await c.req.json().catch(() => null));
     if (!data.success)
       return c.json(
         { error: 'Transcript exceeds the 20,000 character limit.' },
@@ -220,10 +237,18 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   app.all('/copilotkit/*', (c) => platform.handle(c.req.raw));
   app.onError((error, c) => {
     const text = error.message;
+    if (text.startsWith('Space access must include'))
+      return c.json({ error: text }, 400);
     const known =
       /^(Setup|Voice setup|OpenCode|Dot |Space |Specialist |Conversation |Call |This call|End the current|Voice provider|An audio|Intelligence could not)/.test(
         text,
       );
+    // A conversation, call or Dot the caller named that does not exist is a missing resource, not a
+    // server fault.
+    if (
+      /^(Dot not found|Call not found|Conversation does not belong)/.test(text)
+    )
+      return c.json({ error: text }, 404);
     return c.json(
       {
         error: known
