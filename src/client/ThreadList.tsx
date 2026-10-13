@@ -1,5 +1,5 @@
 import { useThreads } from '@copilotkit/react-core/v2';
-import { MessageCircle, Plus } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import type { Conversation, Dot } from '../shared/types';
 export function ThreadList({
   dots,
@@ -7,14 +7,12 @@ export function ThreadList({
   local,
   selected,
   onSelect,
-  onNew,
 }: {
   dots: Dot[];
   dotId: string;
   local: Conversation[];
   selected?: string;
   onSelect: (id: string) => void;
-  onNew: () => void;
 }) {
   const threads = useThreads({
     agentId: dotId,
@@ -23,17 +21,7 @@ export function ThreadList({
     limit: 20,
   });
   return (
-    <section className="thread-list">
-      <div className="nav-label">
-        RECENT CHATS
-        <button
-          className="icon-button"
-          onClick={onNew}
-          aria-label="New conversation"
-        >
-          <Plus size={14} />
-        </button>
-      </div>
+    <div className="thread-list">
       {threads.error && (
         <p className="sidebar-error">
           Conversation sync unavailable. Check your runtime connection.
@@ -67,6 +55,6 @@ export function ThreadList({
           Load more conversations
         </button>
       )}
-    </section>
+    </div>
   );
 }

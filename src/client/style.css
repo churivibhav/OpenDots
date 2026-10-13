@@ -116,21 +116,6 @@ h3 {
   inset: 0 auto 0 0;
   z-index: 30;
 }
-.wordmark {
-  border: 0;
-  background: none;
-  font-weight: 700;
-  font-size: 23px;
-  letter-spacing: -1px;
-  justify-content: flex-start;
-  padding: 0 12px;
-  gap: 10px;
-}
-.wordmark-dot {
-  font-size: 18px;
-  color: #a1addc;
-  margin-left: -6px;
-}
 .dotted-logo {
   display: grid;
   grid-template-columns: repeat(2, 5px);
@@ -273,17 +258,6 @@ h3 {
 }
 .sidebar-bottom .nav-item {
   font-size: 11px;
-}
-.version {
-  display: flex;
-  justify-content: space-between;
-  font-size: 7px;
-  color: #b1b1b7;
-  letter-spacing: 0.8px;
-  padding: 18px 13px 0;
-}
-.version span {
-  letter-spacing: 0;
 }
 .workspace {
   margin-left: 242px;
@@ -1913,17 +1887,54 @@ h3 {
   color: #818ba9;
   margin-bottom: 26px;
 }
-.spaces-heading,
-.thread-list .nav-label {
+/* Sidebar groups fold away; the sidebar scrolls as a whole. */
+.template-app .sidebar {
+  overflow-y: auto;
+}
+.sidebar-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding-right: 3px;
   margin-bottom: 5px;
 }
-.spaces-nav {
-  max-height: 32vh;
-  overflow: auto;
+.sidebar-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.sidebar-section-toggle:hover {
+  color: var(--ink);
+}
+.sidebar-section-toggle svg {
+  transition: transform 0.15s ease;
+}
+.sidebar-section.open .sidebar-section-toggle svg {
+  transform: rotate(90deg);
+}
+.sidebar-section + .sidebar-section {
+  margin-top: 14px;
+}
+.mobile-only {
+  display: none;
+}
+@media (max-width: 700px) {
+  .mobile-only {
+    display: block;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-section-toggle svg {
+    transition: none;
+  }
 }
 .space-group {
   margin-bottom: 17px;
@@ -1963,11 +1974,6 @@ h3 {
   height: 10px;
   border-radius: 6px 6px 4px 4px;
   background: #a6b5e5;
-}
-.thread-list {
-  margin-top: 16px;
-  max-height: 27vh;
-  overflow: auto;
 }
 .thread-list .nav-item {
   padding: 9px 12px;
@@ -3130,15 +3136,6 @@ h3 {
 .template-app.app.nav-collapsed .workspace {
   margin-left: 48px;
 }
-.template-app .wordmark {
-  font-size: 16px;
-  letter-spacing: -0.5px;
-  padding: 0 10px;
-  margin-bottom: 23px;
-}
-.template-app .wordmark-dot {
-  display: none;
-}
 .template-app .nav-item,
 .template-app .dot-nav,
 .template-app .space-title,
@@ -3160,7 +3157,6 @@ h3 {
   border-top: 1px solid var(--line);
   padding-top: 10px;
 }
-.template-app .version,
 .template-app .mode-badge,
 .template-app .connection-note,
 .template-app .composer-bottom > span {
@@ -4424,10 +4420,6 @@ h3 {
 .template-app .setup-icon {
   background: #f1f1f1;
   color: var(--ink);
-}
-/* Dots and Spaces are sibling groups; give the second the same air. */
-.template-app .sidebar > .nav-label ~ .nav-label {
-  margin-top: 18px;
 }
 .template-app .sidebar-bottom .nav-item span {
   min-width: 0;

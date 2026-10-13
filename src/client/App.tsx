@@ -8,7 +8,6 @@ import {
   ArrowUpRight,
   BookOpen,
   Clock3,
-  Code2,
   Folder,
   Menu,
   MessageCircle,
@@ -41,6 +40,7 @@ import {
   type Notices,
 } from './poll-notice';
 import { Mascot, assignCharacters } from './Mascot';
+import { SidebarSection } from './SidebarSection';
 import { Chat } from './Chat';
 import { ThreadList } from './ThreadList';
 import { ResultPane } from './ResultPane';
@@ -341,6 +341,9 @@ export function App() {
         <button aria-label="Open activity" onClick={() => setView('tasks')}>
           <Clock3 size={18} />
         </button>
+        <button aria-label="Open memories" onClick={() => setView('memories')}>
+          <BookOpen size={18} />
+        </button>
         <button
           className="rail-settings"
           aria-label="Open settings"
@@ -370,21 +373,6 @@ export function App() {
         className={`sidebar ${mobile ? 'open' : ''}`}
       >
         <button
-          className="wordmark"
-          onClick={() => {
-            setView('chat');
-            setSelectedThread(undefined);
-          }}
-        >
-          <span className="dotted-logo">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          OpenDots<span className="wordmark-dot">•</span>
-        </button>
-        <button
           className="new-chat nav-item"
           disabled={!configured}
           onClick={() => void newConversation()}
@@ -392,87 +380,116 @@ export function App() {
           <Plus size={17} />
           <span>New chat</span>
         </button>
-        <div className="spaces-heading nav-label">
-          DOTS
-          <button
-            className="icon-button"
-            aria-label="Create Dot"
-            onClick={() =>
-              setDialog({ type: 'dot', spaceId: workspace.spaces[0].id })
-            }
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-        <nav className="dots-nav" aria-label="Dots">
-          {workspace.dots.map((item) => (
-            <div className="dot-nav-row" key={item.id}>
+        <SidebarSection
+          id="dots"
+          title="DOTS"
+          action={
+            <button
+              className="icon-button"
+              aria-label="Create Dot"
+              onClick={() =>
+                setDialog({ type: 'dot', spaceId: workspace.spaces[0].id })
+              }
+            >
+              <Plus size={14} />
+            </button>
+          }
+        >
+          <nav className="dots-nav" aria-label="Dots">
+            {workspace.dots.map((item) => (
+              <div className="dot-nav-row" key={item.id}>
+                <button
+                  className={`dot-nav ${dot.id === item.id && view === 'chat' ? 'active' : ''}`}
+                  aria-current={
+                    dot.id === item.id && view === 'chat' ? 'page' : undefined
+                  }
+                  onClick={() => chooseDot(item)}
+                >
+                  <Mascot
+                    identity={item.id}
+                    name={item.name}
+                    small
+                    decorative
+                  />
+                  <span>{item.name}</span>
+                </button>
+                <button
+                  className="icon-button dot-settings"
+                  aria-label={`Edit ${item.name} settings`}
+                  onClick={() =>
+                    setDialog({ type: 'dot', dot: item, spaceId: item.spaceId })
+                  }
+                >
+                  <MoreHorizontal size={15} />
+                </button>
+              </div>
+            ))}
+          </nav>
+        </SidebarSection>
+        <SidebarSection
+          id="spaces"
+          title="SPACES"
+          action={
+            <button
+              className="icon-button"
+              aria-label="Create Space"
+              onClick={() => setDialog({ type: 'space' })}
+            >
+              <Plus size={14} />
+            </button>
+          }
+        >
+          <nav className="spaces-nav" aria-label="Spaces">
+            {workspace.spaces.map((space) => (
+              <SpaceNav
+                key={space.id}
+                space={space}
+                active={view === 'space' && spaceId === space.id}
+                pageId={pageId}
+                onOpen={(id) => openPage(space.id, id)}
+              />
+            ))}
+          </nav>
+        </SidebarSection>
+        <SidebarSection
+          id="recent"
+          title="RECENT CHATS"
+          action={
+            configured ? (
               <button
-                className={`dot-nav ${dot.id === item.id && view === 'chat' ? 'active' : ''}`}
-                aria-current={
-                  dot.id === item.id && view === 'chat' ? 'page' : undefined
-                }
-                onClick={() => chooseDot(item)}
+                className="icon-button"
+                onClick={() => void newConversation()}
+                aria-label="New conversation"
               >
-                <Mascot identity={item.id} name={item.name} small decorative />
-                <span>{item.name}</span>
+                <Plus size={14} />
               </button>
-              <button
-                className="icon-button dot-settings"
-                aria-label={`Edit ${item.name} settings`}
-                onClick={() =>
-                  setDialog({ type: 'dot', dot: item, spaceId: item.spaceId })
-                }
-              >
-                <MoreHorizontal size={15} />
-              </button>
-            </div>
-          ))}
-        </nav>
-        <div className="spaces-heading nav-label">
-          SPACES
-          <button
-            className="icon-button"
-            aria-label="Create Space"
-            onClick={() => setDialog({ type: 'space' })}
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-        <nav className="spaces-nav" aria-label="Spaces">
-          {workspace.spaces.map((space) => (
-            <SpaceNav
-              key={space.id}
-              space={space}
-              active={view === 'space' && spaceId === space.id}
-              pageId={pageId}
-              onOpen={(id) => openPage(space.id, id)}
+            ) : undefined
+          }
+        >
+          {configured ? (
+            <ThreadList
+              dotId={dot.id}
+              dots={workspace.dots}
+              local={workspace.conversations}
+              selected={view === 'chat' ? selectedThread : undefined}
+              onSelect={(id) => {
+                const conversation = workspace.conversations.find(
+                  (item) => item.id === id,
+                );
+                if (conversation) setSelectedDot(conversation.dotId);
+                setSelectedThread(id);
+                setView('chat');
+                setMobile(false);
+              }}
             />
-          ))}
-        </nav>
-        {configured ? (
-          <ThreadList
-            dotId={dot.id}
-            dots={workspace.dots}
-            local={workspace.conversations}
-            selected={view === 'chat' ? selectedThread : undefined}
-            onSelect={(id) => {
-              const conversation = workspace.conversations.find(
-                (item) => item.id === id,
-              );
-              if (conversation) setSelectedDot(conversation.dotId);
-              setSelectedThread(id);
-              setView('chat');
-              setMobile(false);
-            }}
-            onNew={() => void newConversation()}
-          />
-        ) : (
-          <div className="sidebar-empty">
-            Set up text chat to begin a persistent conversation.
-          </div>
-        )}
-        <div className="sidebar-bottom">
+          ) : (
+            <div className="sidebar-empty">
+              Set up text chat to begin a persistent conversation.
+            </div>
+          )}
+        </SidebarSection>
+        {/* The icon rail covers these on wider screens; phones have no rail. */}
+        <div className="sidebar-bottom mobile-only">
           <button
             className={`nav-item ${view === 'tasks' ? 'active' : ''}`}
             onClick={() => {
@@ -504,19 +521,6 @@ export function App() {
             <Settings2 size={17} />
             <span>Settings & setup</span>
           </button>
-          <a
-            className="nav-item"
-            href="https://github.com/CopilotKit/OpenDots"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Code2 size={17} />
-            <span>Make it your own</span>
-            <ArrowUpRight size={13} />
-          </a>
-          <div className="version">
-            OPEN SOURCE TEMPLATE <span>v0.1</span>
-          </div>
         </div>
       </aside>
       <div className="workspace">
