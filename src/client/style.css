@@ -444,9 +444,6 @@ h3 {
   width: 54px;
   height: 54px;
 }
-.mascot.working .dot-body {
-  animation: bob 2s ease-in-out infinite;
-}
 .mascot.complete .dot-body {
   transform: rotate(-3deg);
   transform-origin: center;
@@ -3513,11 +3510,19 @@ h3 {
   align-items: center;
   justify-content: center;
 }
-.mascot > img {
+.mascot .dot-rig {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 92%;
+}
+.mascot .dot-body {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
+  transform-origin: 50% 92%;
 }
 .template-app .dot-nav > .mascot.small {
   width: 30px;
@@ -3526,9 +3531,296 @@ h3 {
 .dot-nav {
   min-height: 42px;
 }
+
+/* Dots act out what they are doing; idle stays still. Distances are percentages
+   of the avatar, so small header avatars move in proportion. Props are drawn in a
+   100-unit box over the artwork, so px in their transforms are hundredths. */
+.dot-prop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.dot-prop * {
+  transform-box: view-box;
+}
+
+.mascot.connecting .dot-rig {
+  /* Rolls around its middle; the hops after it only translate. */
+  transform-origin: 50% 50%;
+  animation:
+    dot-roll-in 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both,
+    dot-hop 1.3s ease-in-out 0.9s infinite;
+}
+.mascot.connecting .dot-body {
+  animation: dot-squash 1.3s ease-in-out 0.9s infinite;
+}
+@keyframes dot-roll-in {
+  from {
+    opacity: 0;
+    transform: translateX(-45%) rotate(-360deg);
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes dot-hop {
+  0%,
+  18%,
+  70%,
+  100% {
+    transform: none;
+  }
+  45% {
+    transform: translateY(-16%);
+  }
+}
+@keyframes dot-squash {
+  0%,
+  62%,
+  84%,
+  100% {
+    transform: none;
+  }
+  12% {
+    transform: scale(1.08, 0.9);
+  }
+  30% {
+    transform: scale(0.94, 1.07);
+  }
+  72% {
+    transform: scale(1.1, 0.88);
+  }
+}
+
+/* Thinking: peeks one way, then the other, with a little hop between. */
+.mascot.thinking .dot-rig {
+  animation: dot-ponder 9s ease-in-out infinite;
+}
+@keyframes dot-ponder {
+  0%,
+  8%,
+  36%,
+  40%,
+  68%,
+  87%,
+  100% {
+    transform: none;
+  }
+  14%,
+  30% {
+    transform: translateX(-7%) rotate(-9deg);
+  }
+  46%,
+  62% {
+    transform: translateX(7%) rotate(8deg);
+  }
+  74% {
+    transform: translateY(-10%);
+  }
+  79% {
+    transform: none;
+  }
+  83% {
+    transform: translateY(-5%);
+  }
+}
+.dot-thought circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dot-pop 2.4s ease-in-out infinite both;
+}
+.dot-thought circle:nth-child(2) {
+  animation-delay: 0.3s;
+}
+.dot-thought circle:nth-child(3) {
+  animation-delay: 0.6s;
+}
+@keyframes dot-pop {
+  0%,
+  10%,
+  92%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  28%,
+  76% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Researching: reads along each line of a book, turning a page now and then. */
+.mascot.researching .dot-rig {
+  animation: dot-read-lines 7s ease-in-out infinite;
+}
+@keyframes dot-read-lines {
+  0%,
+  45%,
+  90%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  40%,
+  85% {
+    transform: rotate(2deg) translateY(1%);
+  }
+}
+.dot-book,
+.dot-notepad {
+  animation: dot-raise 0.6s cubic-bezier(0.3, 1.3, 0.5, 1) both;
+}
+@keyframes dot-raise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.dot-book-page {
+  opacity: 0;
+  transform-origin: 50px 70px;
+  animation: dot-turn-page 7s ease-in-out infinite;
+}
+@keyframes dot-turn-page {
+  0%,
+  78% {
+    opacity: 0;
+    transform: none;
+  }
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  89% {
+    transform: scaleX(0.05);
+  }
+  97% {
+    opacity: 1;
+    transform: scaleX(-1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(-1);
+  }
+}
+
+/* Wiki work: glasses on, reading nods, and the occasional push of the glasses. */
+.mascot.wiki .dot-rig {
+  animation: dot-study 8s ease-in-out infinite;
+}
+@keyframes dot-study {
+  0%,
+  25%,
+  55%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  12%,
+  40% {
+    transform: rotate(-2deg) translateY(2.5%);
+  }
+  70% {
+    transform: rotate(3deg);
+  }
+  85% {
+    transform: rotate(3deg) translateY(2%);
+  }
+}
+.dot-glasses {
+  animation:
+    dot-glasses-on 0.9s cubic-bezier(0.3, 1.5, 0.5, 1) both,
+    dot-glasses-push 8s ease-in-out 0.9s infinite;
+}
+@keyframes dot-glasses-on {
+  from {
+    opacity: 0;
+    transform: translateY(-34px);
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes dot-glasses-push {
+  0%,
+  64%,
+  76%,
+  100% {
+    transform: none;
+  }
+  68%,
+  71% {
+    transform: translateY(-3px);
+  }
+}
+
+/* Writing: leans into a notepad and scribbles. */
+.mascot.writing .dot-rig {
+  animation: dot-lean 3.2s ease-in-out infinite;
+}
+@keyframes dot-lean {
+  0%,
+  100% {
+    transform: rotate(-5deg) translateY(2%);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(1%);
+  }
+}
+.dot-pencil {
+  animation: dot-scribble 0.7s ease-in-out infinite;
+}
+@keyframes dot-scribble {
+  20% {
+    transform: translate(-3px, 1px);
+  }
+  40% {
+    transform: translate(1px, -1px);
+  }
+  60% {
+    transform: translate(-2px, 2px);
+  }
+  80% {
+    transform: translate(2px, 0);
+  }
+}
+
+/* Computer work: sweeps a magnifying glass across and follows it. */
+.mascot.computer .dot-rig {
+  animation: dot-follow 5s ease-in-out infinite;
+}
+@keyframes dot-follow {
+  0%,
+  100% {
+    transform: translateX(-3%) rotate(-4deg);
+  }
+  50% {
+    transform: translateX(3%) rotate(4deg);
+  }
+}
+.dot-magnifier {
+  transform-origin: 50px 58px;
+  animation: dot-sweep 5s ease-in-out infinite;
+}
+@keyframes dot-sweep {
+  0%,
+  100% {
+    transform: translate(-14px, 2px) rotate(-8deg);
+  }
+  50% {
+    transform: translate(14px, -2px) rotate(8deg);
+  }
+}
+
+/* Without motion the props still show what the Dot is doing. */
 @media (prefers-reduced-motion: reduce) {
-  .mascot.working .dot-body {
-    animation: none;
+  .mascot .dot-rig,
+  .mascot .dot-body,
+  .dot-prop,
+  .dot-prop * {
+    animation: none !important;
   }
 }
 

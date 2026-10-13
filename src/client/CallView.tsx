@@ -65,7 +65,17 @@ export function CallView({
         onClick={voice.phase === 'speaking' ? voice.interrupt : undefined}
         title={voice.phase === 'speaking' ? 'Tap to interrupt' : undefined}
       >
-        <Mascot identity={dot.id} name={dot.name} />
+        <Mascot
+          identity={dot.id}
+          name={dot.name}
+          state={
+            voice.status === 'connecting'
+              ? 'connecting'
+              : voice.status === 'active' && voice.phase === 'thinking'
+                ? 'thinking'
+                : 'idle'
+          }
+        />
         <h2>{dot.name}</h2>
         <span className="call-timer" aria-label="Call duration">
           {duration}

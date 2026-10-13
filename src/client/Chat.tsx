@@ -33,6 +33,7 @@ import {
 import { ChatTranscript, isInternalVoiceReceipt } from './ChatTranscript';
 import type { CallReceipt, Conversation, Dot } from '../shared/types';
 import { Mascot } from './Mascot';
+import { dotActivity } from './dot-activity';
 import { useVoice } from './useVoice';
 import { CallView } from './CallView';
 import { shouldSubmitComposerOnKeyDown } from './chat-composer';
@@ -248,7 +249,12 @@ export function Chat({
           identity={dot.id}
           name={dot.name}
           small
-          state={running ? 'working' : paused ? 'paused' : 'idle'}
+          state={dotActivity({
+            messages: agent.messages,
+            running,
+            connecting: !loaded || !contextReady,
+            paused,
+          })}
         />
         <div>
           <strong>{dot.name}</strong>

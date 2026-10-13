@@ -294,7 +294,7 @@ export function App() {
   if (!state || !workspace || !dot)
     return (
       <main className="unlock">
-        <Mascot state="working" />
+        <Mascot state="connecting" />
         <h1>Finding your dots…</h1>
         {error && (
           <>
